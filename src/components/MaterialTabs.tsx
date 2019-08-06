@@ -2,7 +2,7 @@
 
 import React from 'react';
 import PropTypes from 'prop-types';
-import { Animated, ScrollView, View, Text } from 'react-native';
+import { Animated, ScrollView, View, Text, I18nManager, Platform } from 'react-native';
 import { Bar, TabTrack } from '../lib/styles';
 import values from '../lib/values';
 import Tab from './Tab';
@@ -101,6 +101,7 @@ export default class MaterialTabs extends React.Component<Props, State> {
   bar: View | null;
 
   getAnimateValues() {
+    const koff = I18nManager.isRTL && Platform.OS === "android" ? -1 : 1;
     const idx = this.props.selectedIndex;
     const scrollValue =  this.state.tabWidth || this.state.barWidth * 0.4;
 
@@ -113,27 +114,27 @@ export default class MaterialTabs extends React.Component<Props, State> {
     }
 
     switch (idx) {
-      case 0: // First tab
-        return {
-          indicatorPosition: 0,
-          scrollPosition: 0,
-        };
-      case 1: // Second tab
-        return {
-          indicatorPosition: scrollValue * idx,
-          scrollPosition: scrollValue * 0.25,
-        };
-      case this.props.items.length - 1: // Last tab
-        return {
-          indicatorPosition:
-            scrollValue * idx,
-          scrollPosition: scrollValue * (idx - 2) + scrollValue * 0.5,
-        };
+      // case 0: // First tab
+      //   return {
+      //     indicatorPosition: 0,
+      //     scrollPosition: 0,
+      //   };
+      // case 1: // Second tab
+      //   return {
+      //     indicatorPosition: scrollValue * idx,
+      //     scrollPosition: scrollValue * 0.25,
+      //   };
+      // case this.props.items.length - 1: // Last tab
+      //   return {
+      //     indicatorPosition:
+      //       scrollValue * idx,
+      //     scrollPosition: scrollValue * (idx - 2) + scrollValue * 0.5 * koff,
+      //   };
       default:
         // Any tabs between second and last
         return {
           indicatorPosition: scrollValue * idx,
-          scrollPosition: scrollValue * 0.25 + scrollValue * (idx - 1),
+          scrollPosition: scrollValue * 0.25 + scrollValue * (idx - 1) * koff,
         };
     }
   }
@@ -151,8 +152,9 @@ export default class MaterialTabs extends React.Component<Props, State> {
   }
 
   selectTab() {
+    const koff = I18nManager.isRTL && Platform.OS === "android" ? -1 : 1;
     Animated.spring(this.state.indicatorPosition, {
-      toValue: this.getAnimateValues().indicatorPosition,
+      toValue: this.getAnimateValues().indicatorPosition * koff,
       tension: 300,
       friction: 20,
       useNativeDriver: true,
@@ -222,3 +224,4 @@ export default class MaterialTabs extends React.Component<Props, State> {
     return this.props.items ? this.renderContent() : null;
   }
 }
+
