@@ -1,176 +1,224 @@
-import React, { useState, useEffect } from 'react';
-import {
-  Animated,
-  ScrollView,
-  View,
-  ScrollViewProps,
-  StyleProp,
-  TextStyle,
-  I18nManager,
-} from 'react-native';
+// @flow
 
+import React from 'react';
+import PropTypes from 'prop-types';
+import { Animated, ScrollView, View, Text } from 'react-native';
+import { Bar, TabTrack } from '../lib/styles';
+import values from '../lib/values';
 import Tab from './Tab';
 import Indicator from './Indicator';
-import { ContentType } from './Tab/Tab';
+import type { ContentType } from './Tab/Tab';
 
-import { Bar, TabTrack } from '../lib/styles';
-import constants from '../lib/constants';
+type Props = {
+  allowFontScaling: boolean,
+  selectedIndex: number,
+  barColor: string,
+  barHeight: number,
+  activeTextColor: string,
+  indicatorColor: string,
+  inactiveTextColor: string,
+  scrollable: boolean,
+  textStyle: any,
+  activeTextStyle: any,
+  items: ContentType[],
+  uppercase: boolean,
+  keyboardShouldPersistTaps: string,
+  onChange: (index: number) => void,
+};
 
-interface Props extends Pick<ScrollViewProps, 'keyboardShouldPersistTaps'> {
-  allowFontScaling: boolean;
-  selectedIndex: number;
-  barColor: string;
-  barHeight: number;
-  activeTextColor: string;
-  indicatorColor: string;
-  inactiveTextColor: string;
-  scrollable: boolean;
-  textStyle: StyleProp<TextStyle>;
-  activeTextStyle: StyleProp<TextStyle>;
-  items: ContentType[];
-  uppercase: boolean;
-  onChange(index: number): void;
-}
+type State = {
+  tabWidth: number,
+  barWidth: number,
+  indicatorPosition: Animated.Value,
+};
 
 const getKeyForTab = (item: ContentType) =>
   typeof item === 'string' ? item : item.key;
 
-const MaterialTabs: React.FC<Props> = ({
-  items,
-  selectedIndex,
-  scrollable,
-  keyboardShouldPersistTaps,
-  barHeight,
-  onChange,
-  allowFontScaling,
-  activeTextColor,
-  textStyle,
-  activeTextStyle,
-  inactiveTextColor,
-  uppercase,
-  indicatorColor,
-  barColor,
-}) => {
-  const [tabWidth, setTabWidth] = useState(0);
-  const [barWidth, setBarWidth] = useState(0);
-  const [indicatorPosition] = useState(new Animated.Value(0));
-  const scrollView = React.createRef<ScrollView>();
-  const bar = React.createRef<View>();
+export default class MaterialTabs extends React.Component<Props, State> {
+  static propTypes = {
+    allowFontScaling: PropTypes.bool,
+    selectedIndex: PropTypes.number,
+    barColor: PropTypes.string,
+    barHeight: PropTypes.number,
+    activeTextColor: PropTypes.string,
+    indicatorColor: PropTypes.string,
+    inactiveTextColor: PropTypes.string,
+    scrollable: PropTypes.bool,
+    textStyle: Text.propTypes.style,
+    activeTextStyle: Text.propTypes.style,
+    items: PropTypes.arrayOf(
+      PropTypes.oneOfType([PropTypes.string, PropTypes.element])
+    ).isRequired,
+    uppercase: PropTypes.bool,
+    onChange: PropTypes.func.isRequired,
+    keyboardShouldPersistTaps: PropTypes.string,
+  };
 
-  useEffect(() => {
-    bar.current &&
-      bar.current.measure((_, b, width) => {
-        getTabWidth(width);
-      });
+  static defaultProps = {
+    allowFontScaling: true,
+    selectedIndex: 0,
+    barColor: '#13897b',
+    barHeight: values.barHeight,
+    activeTextColor: '#fff',
+    indicatorColor: '#fff',
+    inactiveTextColor: 'rgba(255, 255, 255, 0.7)',
+    scrollable: false,
+    textStyle: null,
+    uppercase: true,
+    activeTextStyle: {},
+    keyboardShouldPersistTaps: 'never',
+    tabWidth: 0
+  };
 
-    selectTab();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, barWidth]);
+  state = {
+    tabWidth: 0,
+    barWidth: 0,
+    indicatorPosition: new Animated.Value(0),
+  };
 
-  const getAnimateValues = () => {
-    const scrollValue = !scrollable ? tabWidth : barWidth * 0.4;
+  shouldComponentUpdate(nextProps: Props) {
+    // Prevent scrolling out of bounds
+    return (
+      nextProps.selectedIndex < nextProps.items.length &&
+      nextProps.selectedIndex >= 0
+    );
+  }
 
-    const indicator = I18nManager.isRTL
-      ? -selectedIndex * scrollValue
-      : selectedIndex * scrollValue;
+  componentDidUpdate(prevProps: Props) {
+    if (this.props.items.length !== prevProps.items.length) {
+      this.bar &&
+        this.bar.measure((_, b, width) => {
+          this.getTabWidth(width);
+        });
+    }
+
+    this.selectTab();
+  }
+
+  scrollView: ScrollView | null;
+
+  bar: View | null;
+
+  getAnimateValues() {
+    const idx = this.props.selectedIndex;
+    const scrollValue =  this.state.tabWidth || this.state.barWidth * 0.4;
 
     // All props for fixed tabs are the same
-    if (!scrollable) {
+    if (!this.props.scrollable) {
       return {
-        indicatorPosition: indicator,
+        indicatorPosition: idx === 0 ? 0 : idx * scrollValue,
         scrollPosition: 0,
       };
     }
 
-    return {
-      indicatorPosition: indicator,
-      scrollPosition: I18nManager.isRTL
-        ? scrollValue * 0.25 + scrollValue * (items.length - selectedIndex - 2)
-        : scrollValue * 0.25 + scrollValue * (selectedIndex - 1),
-    };
-  };
-
-  const getTabWidth = (width: number) => {
-    if (!scrollable) {
-      setTabWidth(width / items.length);
+    switch (idx) {
+      case 0: // First tab
+        return {
+          indicatorPosition: 0,
+          scrollPosition: 0,
+        };
+      case 1: // Second tab
+        return {
+          indicatorPosition: scrollValue * idx,
+          scrollPosition: scrollValue * 0.25,
+        };
+      case this.props.items.length - 1: // Last tab
+        return {
+          indicatorPosition:
+            scrollValue * idx,
+          scrollPosition: scrollValue * (idx - 2) + scrollValue * 0.5,
+        };
+      default:
+        // Any tabs between second and last
+        return {
+          indicatorPosition: scrollValue * idx,
+          scrollPosition: scrollValue * 0.25 + scrollValue * (idx - 1),
+        };
     }
+  }
 
-    setBarWidth(width);
-  };
+  getTabWidth(width: number) {
+    if (!this.props.scrollable) {
+      this.setState({ tabWidth: width / this.props.items.length });
+    }
+    if (this.props.tabWidth) {
+      this.setState(() => ({tabWidth: this.props.tabWidth}));
+    }
+    this.setState({
+      barWidth: width,
+    });
+  }
 
-  const selectTab = () => {
-    const values = getAnimateValues();
-
-    Animated.spring(indicatorPosition, {
-      toValue: values.indicatorPosition,
+  selectTab() {
+    Animated.spring(this.state.indicatorPosition, {
+      toValue: this.getAnimateValues().indicatorPosition,
       tension: 300,
       friction: 20,
       useNativeDriver: true,
     }).start();
 
-    if (scrollView.current) {
-      scrollView.current.scrollTo({
-        x: values.scrollPosition,
+    if (this.scrollView) {
+      this.scrollView.scrollTo({
+        x: this.getAnimateValues().scrollPosition,
       });
     }
-  };
+  }
 
-  return (
-    items && (
+  renderContent() {
+    return (
       <Bar
-        ref={bar}
-        barColor={barColor}
-        barHeight={barHeight}
-        onLayout={event => getTabWidth(event.nativeEvent.layout.width)}
+        ref={(ref: View | null) => {
+          this.bar = ref;
+        }}
+        barColor={this.props.barColor}
+        barHeight={this.props.barHeight}
+        onLayout={event => this.getTabWidth(event.nativeEvent.layout.width)}
       >
         <ScrollView
           horizontal
-          ref={scrollView}
+          ref={ref => {
+            this.scrollView = ref;
+          }}
           showsHorizontalScrollIndicator={false}
-          keyboardShouldPersistTaps={keyboardShouldPersistTaps}
-          scrollEnabled={scrollable}
+          keyboardShouldPersistTaps={this.props.keyboardShouldPersistTaps}
+          scrollEnabled={this.props.scrollable}
         >
-          <TabTrack barHeight={barHeight}>
-            {items.map((item, idx) => (
+          <TabTrack barHeight={this.props.barHeight}>
+            {this.props.items.map((item, idx) => (
               <Tab
-                allowFontScaling={allowFontScaling}
+                allowFontScaling={this.props.allowFontScaling}
                 content={item}
-                key={getKeyForTab(item) || undefined}
-                onPress={() => onChange(idx)}
-                active={idx === selectedIndex}
-                activeTextColor={activeTextColor}
-                textStyle={textStyle}
-                activeTextStyle={selectedIndex === idx && activeTextStyle}
-                tabHeight={barHeight}
-                tabWidth={!scrollable ? tabWidth : barWidth * 0.4}
-                uppercase={uppercase}
-                inActiveTextColor={inactiveTextColor}
+                key={getKeyForTab(item)}
+                stretch={!this.props.scrollable}
+                onPress={() => this.props.onChange(idx)}
+                active={idx === this.props.selectedIndex}
+                activeTextColor={this.props.activeTextColor}
+                textStyle={this.props.textStyle}
+                activeTextStyle={
+                  this.props.selectedIndex === idx
+                    ? this.props.activeTextStyle
+                    : {}
+                }
+                tabHeight={this.props.barHeight}
+                tabWidth={ this.state.tabWidth || this.state.barWidth * 0.4 }
+                uppercase={this.props.uppercase}
+                inActiveTextColor={this.props.inactiveTextColor}
               />
             ))}
           </TabTrack>
 
           <Indicator
-            color={indicatorColor}
-            value={indicatorPosition}
-            tabWidth={!scrollable ? tabWidth : barWidth * 0.4}
+            color={this.props.indicatorColor}
+            value={this.state.indicatorPosition}
+            tabWidth={ this.state.tabWidth || this.state.barWidth * 0.4 }
           />
         </ScrollView>
       </Bar>
-    )
-  );
-};
+    );
+  }
 
-MaterialTabs.defaultProps = {
-  allowFontScaling: true,
-  selectedIndex: 0,
-  barColor: '#13897b',
-  barHeight: constants.barHeight,
-  activeTextColor: '#fff',
-  indicatorColor: '#fff',
-  inactiveTextColor: 'rgba(255, 255, 255, 0.7)',
-  scrollable: false,
-  uppercase: true,
-  keyboardShouldPersistTaps: 'never',
-};
-
-export default MaterialTabs;
+  render() {
+    return this.props.items ? this.renderContent() : null;
+  }
+}
